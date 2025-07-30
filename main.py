@@ -51,20 +51,29 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
     Traite un fichier Excel et extrait le contenu
     """
     try:
-        print(f"Processing Excel file: {filename}, type: {file_type}")
+        print(f"Processing Excel file: {filename}, declared type: {file_type}")
+        
+        # Détecter le vrai type de fichier basé sur la signature binaire
+        file_signature = file_bytes[:8]
+        signature_hex = ''.join(f'{b:02x}' for b in file_signature)
+        print(f"File signature: {signature_hex}")
+        
+        # Déterminer l'engine basé sur la signature réelle
+        if signature_hex.startswith('504b0304') or signature_hex.startswith('504b0506'):
+            real_type = 'xlsx'
+            engine = 'openpyxl'
+            print(f"Detected real type: XLSX (Office 2007+)")
+        elif signature_hex.startswith('d0cf11e0'):
+            real_type = 'xls'
+            engine = 'xlrd'
+            print(f"Detected real type: XLS (Office 97-2003)")
+        else:
+            return {"success": False, "error": f"Signature de fichier non reconnue: {signature_hex}"}
+        
+        print(f"Using engine: {engine} for real type: {real_type}")
         
         # Créer un buffer en mémoire
         file_buffer = io.BytesIO(file_bytes)
-        
-        # Déterminer l'engine basé sur l'extension du fichier
-        if file_type == 'xlsx':
-            engine = 'openpyxl'
-        elif file_type == 'xls':
-            engine = 'xlrd'
-        else:
-            return {"success": False, "error": f"Type de fichier non supporté: {file_type}"}
-        
-        print(f"Using engine: {engine}")
         
         # Lire le fichier Excel avec le bon engine
         excel_file = pd.ExcelFile(file_buffer, engine=engine)
@@ -106,10 +115,10 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
         return {
             "success": True,
             "text": extracted_text,
-            "method": f"EXCEL_PARSING_{file_type.upper()}",
+            "method": f"EXCEL_PARSING_{real_type.upper()}",
             "confidence": 0.9,
             "filename": filename,
-            "file_type": file_type,
+            "file_type": real_type,
             "sheets_count": len(excel_file.sheet_names),
             "sheets_data": all_sheets_data,
             "textLength": len(extracted_text)
