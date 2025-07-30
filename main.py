@@ -6,6 +6,7 @@ import io
 import json
 import csv
 from typing import Dict, Any, List
+import numpy as np
 
 app = FastAPI(title="Excel/CSV Parser API", version="1.0.0")
 
@@ -16,6 +17,45 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def clean_dataframe_for_json(df):
+    """
+    Nettoie un DataFrame pour la sérialisation JSON
+    """
+    if df.empty:
+        return {
+            "headers": [],
+            "rows": [],
+            "shape": [0, 0]
+        }
+    
+    # Nettoyer les valeurs inf et NaN
+    df_clean = df.replace([np.inf, -np.inf], np.nan)
+    df_clean = df_clean.fillna('')
+    
+    # Convertir en listes pour JSON
+    headers = df_clean.columns.tolist()
+    rows = []
+    
+    for _, row in df_clean.iterrows():
+        row_data = []
+        for value in row:
+            if pd.isna(value) or value == '':
+                row_data.append('')
+            elif isinstance(value, (int, float)):
+                if np.isnan(value) or np.isinf(value):
+                    row_data.append('')
+                else:
+                    row_data.append(str(value))
+            else:
+                row_data.append(str(value))
+        rows.append(row_data)
+    
+    return {
+        "headers": headers,
+        "rows": rows,
+        "shape": list(df_clean.shape)
+    }
 
 @app.get("/")
 async def root():
@@ -59,16 +99,19 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
         print(f"File signature: {signature_hex}")
         
         # Déterminer l'engine basé sur la signature réelle
-        if signature_hex.startswith('504b0304') or signature_hex.startswith('504b0506'):
+        if signature_hex.startswith('504b'):
             real_type = 'xlsx'
             engine = 'openpyxl'
             print(f"Detected real type: XLSX (Office 2007+)")
-        elif signature_hex.startswith('d0cf11e0'):
+        elif signature_hex.startswith('d0cf'):
             real_type = 'xls'
             engine = 'xlrd'
             print(f"Detected real type: XLS (Office 97-2003)")
         else:
-            return {"success": False, "error": f"Signature de fichier non reconnue: {signature_hex}"}
+            # Fallback : utiliser l'extension du fichier
+            real_type = file_type
+            engine = 'openpyxl' if file_type == 'xlsx' else 'xlrd'
+            print(f"Using fallback: {file_type} with engine {engine}")
         
         print(f"Using engine: {engine} for real type: {real_type}")
         
@@ -95,11 +138,7 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
                 extracted_text += sheet_text + "\n"
                 
                 # Stocker les données structurées
-                all_sheets_data[sheet_name] = {
-                    "headers": df.columns.tolist() if not df.empty else [],
-                    "rows": df.values.tolist() if not df.empty else [],
-                    "shape": df.shape
-                }
+                all_sheets_data[sheet_name] = clean_dataframe_for_json(df)
                 
                 print(f"Successfully processed sheet: {sheet_name}")
                 

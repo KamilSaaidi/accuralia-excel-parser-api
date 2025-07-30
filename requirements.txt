@@ -4,4 +4,5 @@ python-multipart==0.0.6
 pandas==2.1.4
 openpyxl==3.1.2
 xlrd==2.0.1
-python-csv==0.0.13 
+python-csv==0.0.13
+numpy==1.24.3 
