@@ -30,8 +30,10 @@ async def parse_excel(fileData: str = Form(...), filename: str = Form(...)):
         # Décoder le fichier base64
         file_bytes = base64.b64decode(fileData)
         
-        # Détecter le type de fichier
+        # Détecter le type de fichier basé sur l'extension
         file_extension = filename.lower().split('.')[-1]
+        
+        print(f"Processing file: {filename}, extension: {file_extension}")
         
         if file_extension in ['xlsx', 'xls']:
             return await process_excel_file(file_bytes, filename, file_extension)
@@ -41,6 +43,7 @@ async def parse_excel(fileData: str = Form(...), filename: str = Form(...)):
             return {"success": False, "error": f"Format de fichier non supporté: {file_extension}"}
             
     except Exception as e:
+        print(f"Error in parse_excel: {str(e)}")
         return {"success": False, "error": str(e), "method": "EXCEL_PARSER_ERROR"}
 
 async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -> Dict[str, Any]:
@@ -48,16 +51,23 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
     Traite un fichier Excel et extrait le contenu
     """
     try:
+        print(f"Processing Excel file: {filename}, type: {file_type}")
+        
         # Créer un buffer en mémoire
         file_buffer = io.BytesIO(file_bytes)
         
-        # Lire le fichier Excel selon son type
+        # Déterminer l'engine basé sur l'extension du fichier
         if file_type == 'xlsx':
-            # Utiliser openpyxl pour XLSX
-            excel_file = pd.ExcelFile(file_buffer, engine='openpyxl')
+            engine = 'openpyxl'
+        elif file_type == 'xls':
+            engine = 'xlrd'
         else:
-            # Utiliser xlrd pour XLS
-            excel_file = pd.ExcelFile(file_buffer, engine='xlrd')
+            return {"success": False, "error": f"Type de fichier non supporté: {file_type}"}
+        
+        print(f"Using engine: {engine}")
+        
+        # Lire le fichier Excel avec le bon engine
+        excel_file = pd.ExcelFile(file_buffer, engine=engine)
         
         # Extraire le contenu de toutes les feuilles
         all_sheets_data = {}
@@ -65,11 +75,10 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
         
         for sheet_name in excel_file.sheet_names:
             try:
+                print(f"Processing sheet: {sheet_name}")
+                
                 # Lire la feuille avec le bon engine
-                if file_type == 'xlsx':
-                    df = pd.read_excel(file_buffer, sheet_name=sheet_name, engine='openpyxl')
-                else:
-                    df = pd.read_excel(file_buffer, sheet_name=sheet_name, engine='xlrd')
+                df = pd.read_excel(file_buffer, sheet_name=sheet_name, engine=engine)
                 
                 # Convertir en texte
                 sheet_text = df.to_string(index=False, header=True)
@@ -83,12 +92,16 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
                     "shape": df.shape
                 }
                 
+                print(f"Successfully processed sheet: {sheet_name}")
+                
             except Exception as sheet_error:
                 print(f"Erreur lecture feuille {sheet_name}: {sheet_error}")
                 continue
         
         # Nettoyer le texte extrait
         extracted_text = extracted_text.strip()
+        
+        print(f"Extracted text length: {len(extracted_text)}")
         
         return {
             "success": True,
@@ -103,6 +116,7 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
         }
         
     except Exception as e:
+        print(f"Error in process_excel_file: {str(e)}")
         return {"success": False, "error": f"Erreur traitement Excel: {str(e)}", "method": "EXCEL_PARSER_ERROR"}
 
 async def process_csv_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
