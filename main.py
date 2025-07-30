@@ -65,8 +65,11 @@ async def process_excel_file(file_bytes: bytes, filename: str, file_type: str) -
         
         for sheet_name in excel_file.sheet_names:
             try:
-                # Lire la feuille
-                df = pd.read_excel(file_buffer, sheet_name=sheet_name, engine='openpyxl' if file_type == 'xlsx' else 'xlrd')
+                # Lire la feuille avec le bon engine
+                if file_type == 'xlsx':
+                    df = pd.read_excel(file_buffer, sheet_name=sheet_name, engine='openpyxl')
+                else:
+                    df = pd.read_excel(file_buffer, sheet_name=sheet_name, engine='xlrd')
                 
                 # Convertir en texte
                 sheet_text = df.to_string(index=False, header=True)
